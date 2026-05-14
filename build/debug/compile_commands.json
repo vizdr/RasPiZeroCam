@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug",
-  "command": "/opt/arm-gnu-toolchain-13.3/bin/aarch64-none-linux-gnu-g++ --sysroot=/home/vladimir/rpi-sysroot -DDEBUG=1 -DHAVE_LIBCAMERA=1 -I/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/src -I/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/third_party -I/home/vladimir/rpi-sysroot/usr/include/libcamera -march=armv8-a -mtune=cortex-a53 --sysroot=/home/vladimir/rpi-sysroot -B/home/vladimir/rpi-sysroot/usr/lib/aarch64-linux-gnu -I/home/vladimir/rpi-sysroot/usr/include/aarch64-linux-gnu -g -std=c++17 -Wall -Wextra -Wpedantic -Wno-unused-parameter -O0 -g3 -fno-omit-frame-pointer -o CMakeFiles/pizero2cam_app.dir/src/main.cpp.o -c /home/vladimir/projects/Raspi-Z2-Cam/camera_controller/src/main.cpp",
-  "file": "/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/src/main.cpp",
-  "output": "CMakeFiles/pizero2cam_app.dir/src/main.cpp.o"
-}
-]
