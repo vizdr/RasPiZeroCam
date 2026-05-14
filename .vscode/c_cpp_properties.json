@@ -1,0 +1,29 @@
+{
+    "configurations": [
+        {
+            "name": "Cross-Compile Camera aarch64 (Pi Zero 2 W)",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${env:HOME}/rpi-sysroot/usr/include",
+                "${env:HOME}/rpi-sysroot/usr/include/aarch64-linux-gnu",
+                "${env:HOME}/rpi-sysroot/usr/local/include"
+            ],
+            "defines": [
+                "__aarch64__",
+                "__ARM_ARCH=8",
+                "DEBUG"
+            ],
+            "compilerPath": "/usr/bin/aarch64-linux-gnu-g++",
+            "compilerArgs": [
+                "--sysroot=${env:HOME}/rpi-sysroot",
+                "-march=armv8-a",
+                "-mtune=cortex-a53"
+            ],
+            "cStandard":   "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-arm64",
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}

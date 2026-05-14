@@ -1,0 +1,145 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cross-configure-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B",
+                "build/debug",
+                "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/aarch64-pi-zero2.cmake",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "cross-build-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build/debug",
+                "--parallel",
+                "$(nproc)",
+                "--config",
+                "Debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "cross-configure-debug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "cross-build-release",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B",
+                "build/release",
+                "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/aarch64-pi-zero2.cmake",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "&&",
+                "cmake",
+                "--build",
+                "build/release",
+                "--parallel",
+                "$(nproc)"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "deploy-to-pizero2",
+            "type": "shell",
+            "command": "rsync",
+            "args": [
+                "-avz",
+                "--progress",
+                "build/debug/pizero2cam_app",
+                "vladimir@raspizero2:~/apps/"
+            ],
+            "dependsOn": "cross-build-debug",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "deploy-and-run",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "scripts/deploy_run.sh",
+                "debug"
+            ],
+            "dependsOn": "cross-build-debug",
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "start-gdb-server",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "scripts/start_gdb_server.sh"
+            ],
+            "group": "test",
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^NOMATCH_INTENTIONALLY$",
+                    "file": 1,
+                    "line": 2,
+                    "message": 3
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "=== GDB Server Setup ===",
+                    "endsPattern": "Listening on port"
+                }
+            }
+        },
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "rm -rf build/debug build/release",
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            }
+        }
+    ]
+}

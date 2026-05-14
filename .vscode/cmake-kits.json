@@ -1,0 +1,11 @@
+[
+    {
+        "name": "ARM aarch64-none-linux-gnu",
+        "compilers": {
+            "C":   "/opt/arm-gnu-toolchain-13.3/bin/aarch64-none-linux-gnu-gcc",
+            "CXX": "/opt/arm-gnu-toolchain-13.3/bin/aarch64-none-linux-gnu-g++"
+        },
+        "toolchainFile": "${workspaceFolder}/aarch64-pi-zero2.cmake",
+        "isTrusted": true
+    }
+]

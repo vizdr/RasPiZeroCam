@@ -1,0 +1,7 @@
+/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug/CMakeFiles/pizero2cam_app.dir
+/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug/CMakeFiles/edit_cache.dir
+/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug/CMakeFiles/rebuild_cache.dir
+/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug/CMakeFiles/list_install_components.dir
+/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug/CMakeFiles/install.dir
+/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug/CMakeFiles/install/local.dir
+/home/vladimir/projects/Raspi-Z2-Cam/camera_controller/build/debug/CMakeFiles/install/strip.dir
