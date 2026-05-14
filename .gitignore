@@ -1,0 +1,39 @@
+# ── Build output ───────────────────────────────────────
+build/
+
+# ── Compiled binary (if ever built in-tree) ────────────
+pizero2cam_app
+
+# ── CMake generated files ──────────────────────────────
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+
+# ── compile_commands.json ──────────────────────────────
+# Keep it — used by IntelliSense / clangd.
+# If you prefer to exclude it, uncomment the line below.
+# compile_commands.json
+
+# ── Recordings ─────────────────────────────────────────
+recordings/
+
+# ── VS Code workspace state ────────────────────────────
+# Commit the config files; ignore generated/local-only files.
+.vscode/configurationCache.log
+.vscode/dryrun.log
+.vscode/targets.log
+.vscode/*.log
+
+# ── Editor & OS noise ──────────────────────────────────
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# ── Credentials / secrets ──────────────────────────────
+*.pem
+*.key
+*.env
