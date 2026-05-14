@@ -40,6 +40,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ── Main executable ────────────────────────────────────
 add_executable(pizero2cam_app
     src/main.cpp
+    src/power/ina219.cpp
 )
 
 # ── Include directories ────────────────────────────────
