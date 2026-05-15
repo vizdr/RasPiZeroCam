@@ -41,6 +41,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_executable(pizero2cam_app
     src/main.cpp
     src/power/ina219.cpp
+    src/camera/camera_manager.cpp
+    src/record/recorder.cpp
 )
 
 # ── Include directories ────────────────────────────────
@@ -53,22 +55,26 @@ target_link_libraries(pizero2cam_app
     PRIVATE pthread rt atomic
 )
 
-# ── Optional: libcamera ────────────────────────────────
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-    pkg_check_modules(LIBCAMERA QUIET libcamera)
-    if(LIBCAMERA_FOUND)
-        message(STATUS "libcamera: ${LIBCAMERA_VERSION}")
-        target_include_directories(pizero2cam_app PRIVATE
-            ${LIBCAMERA_INCLUDE_DIRS})
-        target_link_libraries(pizero2cam_app PRIVATE
-            ${LIBCAMERA_LINK_LIBRARIES})
-        target_compile_definitions(pizero2cam_app PRIVATE
-            HAVE_LIBCAMERA=1)
-    else()
-        message(STATUS "libcamera not found — skipping")
-    endif()
-endif()
+# ── libcamera (required — camera_manager.cpp depends on it) ───────────
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBCAMERA REQUIRED libcamera)
+
+message(STATUS "libcamera: ${LIBCAMERA_VERSION}")
+target_include_directories(pizero2cam_app PRIVATE
+    ${LIBCAMERA_INCLUDE_DIRS})
+target_link_libraries(pizero2cam_app PRIVATE
+    ${LIBCAMERA_LINK_LIBRARIES})
+target_compile_definitions(pizero2cam_app PRIVATE
+    HAVE_LIBCAMERA=1)
+
+# ── GStreamer (required — recorder.cpp depends on it) ──────────────────
+pkg_check_modules(GST REQUIRED
+    gstreamer-1.0
+    gstreamer-app-1.0)
+
+message(STATUS "GStreamer: ${GST_VERSION}")
+target_include_directories(pizero2cam_app PRIVATE ${GST_INCLUDE_DIRS})
+target_link_libraries(pizero2cam_app PRIVATE ${GST_LINK_LIBRARIES})
 
 # ── Install ────────────────────────────────────────────
 install(TARGETS pizero2cam_app RUNTIME DESTINATION bin)

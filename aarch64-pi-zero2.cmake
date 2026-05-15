@@ -1,6 +1,7 @@
 # CMake Toolchain File
 # Target: Raspberry Pi Zero 2 W (aarch64 / Cortex-A53)
 # Host:   Ubuntu 22.04 x86_64
+# Toolchain: Ubuntu aarch64-linux-gnu-g++ (apt: gcc-aarch64-linux-gnu)
 
 # ── System identification ──────────────────────────────
 set(CMAKE_SYSTEM_NAME      Linux)
@@ -11,8 +12,16 @@ set(SYSROOT "$ENV{HOME}/rpi-sysroot")
 set(CMAKE_SYSROOT ${SYSROOT})
 
 # ── Cross-compiler paths ───────────────────────────────
-set(CROSS_TRIPLE "aarch64-none-linux-gnu")
-set(CROSS_PREFIX "/opt/arm-gnu-toolchain-13.3/bin/${CROSS_TRIPLE}-")
+# Ubuntu's aarch64-linux-gnu toolchain is built against Debian/Ubuntu glibc —
+# the same family as Raspberry Pi OS.  This means:
+#   • It knows the Debian multiarch layout (aarch64-linux-gnu/) natively,
+#     so no -B or -I workarounds are needed.
+#   • Its include-fixed/pthread.h was patched from a compatible glibc version,
+#     so PTHREAD_COND_INITIALIZER matches the sysroot's struct layout.
+#   • libcamera's CXXABI_1.3.15 requirement is satisfied without the GCC 14
+#     library-path workaround required by the ARM official toolchain.
+set(CROSS_TRIPLE "aarch64-linux-gnu")
+set(CROSS_PREFIX "/usr/bin/${CROSS_TRIPLE}-")
 
 set(CMAKE_C_COMPILER   ${CROSS_PREFIX}gcc)
 set(CMAKE_CXX_COMPILER ${CROSS_PREFIX}g++)
@@ -24,22 +33,18 @@ set(CMAKE_OBJCOPY      ${CROSS_PREFIX}objcopy)
 set(CMAKE_OBJDUMP      ${CROSS_PREFIX}objdump)
 
 # ── Compiler flags for Cortex-A53 ─────────────────────
-# -B: startup files (crt1.o etc.); -I: multiarch system headers
 set(CMAKE_C_FLAGS_INIT
-    "-march=armv8-a -mtune=cortex-a53 --sysroot=${SYSROOT} -B${SYSROOT}/usr/lib/aarch64-linux-gnu -I${SYSROOT}/usr/include/aarch64-linux-gnu")
+    "-march=armv8-a -mtune=cortex-a53 --sysroot=${SYSROOT}")
 
 set(CMAKE_CXX_FLAGS_INIT
-    "-march=armv8-a -mtune=cortex-a53 --sysroot=${SYSROOT} -B${SYSROOT}/usr/lib/aarch64-linux-gnu -I${SYSROOT}/usr/include/aarch64-linux-gnu")
+    "-march=armv8-a -mtune=cortex-a53 --sysroot=${SYSROOT}")
 
 # ── Linker flags ───────────────────────────────────────
-# GCC 14 path comes first so the sysroot's libstdc++ (CXXABI_1.3.15) wins
-# over the cross-compiler's GCC 13 libstdc++ (max CXXABI_1.3.14).
+# -rpath-link: satisfies transitive shared-library dependencies (libpisp,
+#              libudev, etc. needed by libcamera) at link time without
+#              embedding runtime paths in the binary.
 set(CMAKE_EXE_LINKER_FLAGS_INIT
     "--sysroot=${SYSROOT} \
-     -L${SYSROOT}/usr/lib/gcc/aarch64-linux-gnu/14 \
-     -L${SYSROOT}/lib/gcc/aarch64-linux-gnu/14 \
-     -L${SYSROOT}/usr/lib/aarch64-linux-gnu \
-     -L${SYSROOT}/lib/aarch64-linux-gnu \
      -Wl,-rpath-link,${SYSROOT}/lib/aarch64-linux-gnu \
      -Wl,-rpath-link,${SYSROOT}/usr/lib/aarch64-linux-gnu")
 

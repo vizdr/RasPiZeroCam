@@ -1,6 +1,6 @@
 {
     "cmake.buildDirectory": "${workspaceFolder}/build/debug",
-    "cmake.defaultKit": "ARM aarch64-none-linux-gnu",
+    "cmake.defaultKit": "Ubuntu aarch64-linux-gnu",
     "cmake.configureArgs": [
         "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/aarch64-pi-zero2.cmake",
         "-DCMAKE_BUILD_TYPE=Debug",
