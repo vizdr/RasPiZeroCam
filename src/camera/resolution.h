@@ -46,3 +46,37 @@ inline constexpr Resolution resolution_from_string(std::string_view s) noexcept
     if (s == "1920x1080" || s == "high")   return Resolution::HIGH;
     return Resolution::MEDIUM;                   // default for "1280x720" or anything else
 }
+
+// ── Still-capture resolutions (Phase D — dual-stream) ──────────────────────
+//
+// These presets describe the StillCapture stream added in Phase D.
+// In Phase C, request_snapshot() delivers a frame at the current video
+// resolution instead; the interface is identical so no call-site changes.
+//
+// OV5647 (Pi Camera v1) sensor modes:
+//   FULL       — full 5 MP sensor read-out, maximum image quality
+//   MEDIUM_4K3 — 2× binned 1.3 MP, faster ISP, lower power
+//   WIDESCREEN — 16:9 crop of the full sensor (4 MP)
+
+enum class StillResolution : uint8_t {
+    FULL       = 0,   // 2592 × 1944 — 5 MP (full sensor)
+    MEDIUM_4K3 = 1,   // 1296 ×  972 — 1.3 MP (2× binned, faster)
+    WIDESCREEN = 2,   // 2592 × 1458 — 4 MP 16:9 crop
+};
+
+struct StillResolutionConfig {
+    uint32_t         width;
+    uint32_t         height;
+    std::string_view label;
+};
+
+inline constexpr StillResolutionConfig STILL_RESOLUTION_TABLE[] = {
+    { 2592, 1944, "2592x1944 (5 MP)"  },   // FULL
+    { 1296,  972, "1296x972 (1.3 MP)" },   // MEDIUM_4K3
+    { 2592, 1458, "2592x1458 (4 MP)"  },   // WIDESCREEN
+};
+
+inline constexpr const StillResolutionConfig& still_config_of(StillResolution r) noexcept
+{
+    return STILL_RESOLUTION_TABLE[static_cast<uint8_t>(r)];
+}

@@ -323,10 +323,81 @@ void CameraManager::on_request_completed(libcamera::Request* request)
         requeue_request(request);
     };
 
+    // Phase C snapshot: if armed, copy the shared_ptr into still_queue_
+    // BEFORE moving it into the video queue so both hold a reference.
+    // Phase D: this block is bypassed once the real still stream is active.
+    if (snapshot_armed_.exchange(false, std::memory_order_acq_rel)) {
+        FramePtr still = frame;           // shared_ptr copy — refcount +1
+        still->stream_type = StreamType::Still;
+        still_queue_.push(std::move(still));
+    }
+
     if (!queue_.push(std::move(frame))) {
         // Queue full — drop this frame and immediately recycle the buffer
         requeue_request(request);
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Snapshot trigger — Phase C implementation
+// ═══════════════════════════════════════════════════════════════════════════
+
+bool CameraManager::request_snapshot()
+{
+    if (!running_) return false;
+    // Arm the flag. on_request_completed() will copy the next video frame
+    // into still_queue_ (same DMA pointer, refcount bumped by 1).
+    // In Phase D this flag is not used; the still stream fires independently.
+    bool expected = false;
+    return snapshot_armed_.compare_exchange_strong(expected, true,
+                                                   std::memory_order_release);
+}
+
+FramePtr CameraManager::try_get_snapshot()
+{
+    return still_queue_.pop();
+}
+
+bool CameraManager::set_still_resolution(StillResolution res)
+{
+    still_res_ = res;
+    // Phase D: if the still stream is active, reconfigure it here.
+    // Phase C: no-op — the video frame is always at the video resolution.
+    return true;
+}
+
+// ── Phase D helper stubs ───────────────────────────────────────────────────
+// Bodies are intentionally minimal. Phase D replaces these with full
+// implementations mirroring configure_stream() / allocate_and_map_buffers()
+// / create_requests() but for the StillCapture role.
+
+bool CameraManager::configure_still_stream(StillResolution /*res*/)
+{
+    // TODO Phase D: append StreamRole::StillCapture to cam_config_,
+    //               set still_stream_ = cam_config_->at(1).stream().
+    return false;
+}
+
+bool CameraManager::allocate_and_map_still_buffers()
+{
+    // TODO Phase D: allocate 1 DMA buffer for the still stream,
+    //               mmap it into still_mapped_.
+    return false;
+}
+
+bool CameraManager::create_still_request()
+{
+    // TODO Phase D: create one libcamera::Request, add the still buffer,
+    //               push into still_requests_.
+    return false;
+}
+
+void CameraManager::handle_still_completed(libcamera::Request* /*request*/)
+{
+    // TODO Phase D: mirror on_request_completed() for the still stream.
+    //               Build a Frame with stream_type = StreamType::Still,
+    //               push into still_queue_, do NOT re-queue the request
+    //               (still requests are single-shot).
 }
 
 // ── Re-queue a completed request for the next capture ─────────────────────

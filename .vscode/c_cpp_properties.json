@@ -8,6 +8,10 @@
                 "${env:HOME}/rpi-sysroot/usr/include",
                 "${env:HOME}/rpi-sysroot/usr/include/aarch64-linux-gnu",
                 "${env:HOME}/rpi-sysroot/usr/include/libcamera",
+                "${env:HOME}/rpi-sysroot/usr/include/gstreamer-1.0",
+                "${env:HOME}/rpi-sysroot/usr/include/glib-2.0",
+                "${env:HOME}/rpi-sysroot/usr/lib/aarch64-linux-gnu/glib-2.0/include",
+                "${env:HOME}/rpi-sysroot/usr/include/sysprof-6",
                 "${env:HOME}/rpi-sysroot/usr/local/include"
             ],
             "defines": [

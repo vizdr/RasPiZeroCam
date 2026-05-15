@@ -23,6 +23,19 @@
 #include <functional>
 #include <chrono>
 
+// ── Stream type ────────────────────────────────────────────────────────────
+//
+// Tags which libcamera stream produced this frame.
+// Phase C: all frames are Video (single stream).
+// Phase D: CameraManager adds a StillCapture stream; still frames carry
+//          StreamType::Still so downstream consumers (Snapshot) can
+//          distinguish them from the continuous video feed.
+
+enum class StreamType : uint8_t {
+    Video = 0,   // continuous video stream — recorder, MJPEG server
+    Still = 1,   // single-shot still capture — snapshot encoder (Phase D)
+};
+
 // ── Pixel formats (FourCC values matching V4L2 / libcamera) ────────────────
 
 enum class PixelFormat : uint32_t {
@@ -52,6 +65,10 @@ struct Frame {
     // Timing
     uint64_t sequence = 0;
     std::chrono::steady_clock::time_point timestamp;
+
+    // Which libcamera stream this frame came from.
+    // Default Video keeps Phase C code unchanged.
+    StreamType stream_type = StreamType::Video;
 
     // Called on destruction — returns the DMA buffer to libcamera.
     // Set by the capture layer when creating the Frame.
@@ -141,3 +158,7 @@ private:
 
 using FramePtr         = std::shared_ptr<Frame>;
 using CameraFrameQueue = FrameQueue<8>;   // 8 slots — matches libcamera's typical buffer count
+
+// Phase D: still stream only ever has 1 frame in flight at a time
+// (one DMA buffer armed, one slot to hold the result until the consumer reads it).
+using StillFrameQueue  = FrameQueue<2>;
