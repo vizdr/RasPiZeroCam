@@ -70,6 +70,14 @@ struct Frame {
     // Default Video keeps Phase C code unchanged.
     StreamType stream_type = StreamType::Video;
 
+    // DMA-BUF file descriptor for this buffer's physical memory.
+    // Set by CameraManager from FrameBuffer::planes()[0].fd.
+    // Valid for the lifetime of the Frame (the FrameBufferAllocator owns the fd).
+    // Used by Recorder to pass the buffer to v4l2h264enc via V4L2_MEMORY_DMABUF
+    // (zero-copy hardware encoding — no pixel data copy at any point).
+    // -1 if not available (e.g. frames constructed without libcamera).
+    int dma_fd = -1;
+
     // Called on destruction — returns the DMA buffer to libcamera.
     // Set by the capture layer when creating the Frame.
     std::function<void()> release;

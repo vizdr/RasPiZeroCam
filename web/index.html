@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiCamera</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    header {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0 12px;
+    }
+    h1 { font-size: 1.2rem; color: #a0c4ff; }
+    #battery-widget {
+      font-size: 0.9rem;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 4px 12px;
+    }
+    #stream-container {
+      width: 100%;
+      max-width: 720px;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #stream-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    #error-msg {
+      display: none;
+      color: #ff6b6b;
+      padding: 8px;
+      text-align: center;
+    }
+    #controls {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    #btn-snapshot { background: #0f3460; color: #e0e0e0; }
+    #btn-snapshot:hover { background: #1a5080; }
+    #status-bar {
+      width: 100%;
+      max-width: 720px;
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 8px;
+    }
+    a { color: #a0c4ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>&#128247; PiCamera</h1>
+    <div id="battery-widget">
+      <span id="bat-pct">--%</span>
+      <span id="bat-v" style="margin-left:6px; color:#888;">--V</span>
+    </div>
+  </header>
+
+  <div id="stream-container">
+    <!-- Browser natively decodes multipart/x-mixed-replace MJPEG streams -->
+    <img id="stream-img"
+         src="/stream.mjpeg"
+         alt="Live stream"
+         onerror="handleStreamError()">
+    <div id="error-msg">
+      Stream unavailable — <a href="javascript:reconnect()">reconnect</a>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="btn-snapshot" onclick="takeSnapshot()">&#128247; Snapshot</button>
+  </div>
+
+  <div id="status-bar">
+    Clients: <span id="stat-clients">--</span> &nbsp;|&nbsp;
+    Resolution: <span id="stat-res">--</span> &nbsp;|&nbsp;
+    <span id="stat-fps">--</span> fps
+  </div>
+
+  <script>
+    // ── Status polling ──────────────────────────────────────────────────────
+    async function updateStatus() {
+      try {
+        const r = await fetch('/api/status');
+        const s = await r.json();
+        document.getElementById('bat-pct').textContent  = s.battery_pct + '%';
+        document.getElementById('bat-v').textContent    = s.voltage_v.toFixed(2) + 'V';
+        document.getElementById('stat-clients').textContent = s.clients;
+        document.getElementById('stat-res').textContent     = s.resolution;
+        document.getElementById('stat-fps').textContent     = s.fps;
+      } catch (e) { /* server not yet ready */ }
+    }
+    updateStatus();
+    setInterval(updateStatus, 5000);
+
+    // ── Stream error handling ───────────────────────────────────────────────
+    function handleStreamError() {
+      document.getElementById('stream-img').style.display  = 'none';
+      document.getElementById('error-msg').style.display   = 'block';
+    }
+
+    function reconnect() {
+      const img = document.getElementById('stream-img');
+      img.style.display = 'block';
+      document.getElementById('error-msg').style.display = 'none';
+      img.src = '/stream.mjpeg?' + Date.now();  // cache-bust
+    }
+
+    // ── Snapshot ────────────────────────────────────────────────────────────
+    function takeSnapshot() {
+      const a = document.createElement('a');
+      a.href     = '/snapshot.jpg';
+      a.download = 'snapshot_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.jpg';
+      a.click();
+    }
+  </script>
+</body>
+</html>

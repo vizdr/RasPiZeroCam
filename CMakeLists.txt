@@ -43,6 +43,11 @@ add_executable(pizero2cam_app
     src/power/ina219.cpp
     src/camera/camera_manager.cpp
     src/record/recorder.cpp
+    src/record/h264_hw_encoder.cpp
+    src/stream/mjpeg_server.cpp
+    src/stream/jpeg_hw_encoder.cpp
+    src/stream/jpeg_mt_encoder.cpp
+    src/stream/gst_camera_source.cpp
 )
 
 # ── Include directories ────────────────────────────────
@@ -75,6 +80,9 @@ pkg_check_modules(GST REQUIRED
 message(STATUS "GStreamer: ${GST_VERSION}")
 target_include_directories(pizero2cam_app PRIVATE ${GST_INCLUDE_DIRS})
 target_link_libraries(pizero2cam_app PRIVATE ${GST_LINK_LIBRARIES})
+
+# ── libjpeg — jpeg_mt_encoder.cpp uses jpeglib.h + jpeg_write_raw_data ────
+target_link_libraries(pizero2cam_app PRIVATE jpeg)
 
 # ── Install ────────────────────────────────────────────
 install(TARGETS pizero2cam_app RUNTIME DESTINATION bin)

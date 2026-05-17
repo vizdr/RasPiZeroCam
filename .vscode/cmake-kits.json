@@ -1,11 +1,11 @@
 [
-    {
-        "name": "Ubuntu aarch64-linux-gnu",
-        "compilers": {
-            "C":   "/usr/bin/aarch64-linux-gnu-gcc",
-            "CXX": "/usr/bin/aarch64-linux-gnu-g++"
-        },
-        "toolchainFile": "${workspaceFolder}/aarch64-pi-zero2.cmake",
-        "isTrusted": true
-    }
+  {
+    "name": "Ubuntu aarch64-linux-gnu",
+    "compilers": {
+      "C": "/usr/bin/aarch64-linux-gnu-gcc",
+      "CXX": "/usr/bin/aarch64-linux-gnu-g++"
+    },
+    "toolchainFile": "${workspaceFolder}/aarch64-pi-zero2.cmake",
+    "isTrusted": true
+  }
 ]

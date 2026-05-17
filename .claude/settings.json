@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s --max-time 1 http://raspizero2:8080/api/status)",
+      "Bash(PKG_CONFIG_DIR='' PKG_CONFIG_LIBDIR=__TRACKED_VAR__/rpi-sysroot/usr/lib/aarch64-linux-gnu/pkgconfig:__TRACKED_VAR__/rpi-sysroot/usr/lib/pkgconfig pkg-config --modversion gstreamer-plugins-bad-1.0)",
+      "Bash(rsync -az web/ raspizero2:~/apps/web/)"
+    ]
+  }
+}

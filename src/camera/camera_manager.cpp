@@ -4,9 +4,9 @@
 #include "camera_manager.h"
 
 #include <iostream>
-#include <sys/mman.h>           // mmap, munmap, PROT_READ, PROT_WRITE, MAP_SHARED
+#include <sys/mman.h> // mmap, munmap, PROT_READ, PROT_WRITE, MAP_SHARED
 
-#include <libcamera/formats.h>  // libcamera::formats::NV12
+#include <libcamera/formats.h> // libcamera::formats::NV12
 
 // NOTE: libcamera::CameraManager conflicts in name with our own CameraManager
 // class, so we do NOT use "using namespace libcamera;" here.
@@ -14,9 +14,10 @@
 
 // ── Constructor / Destructor ───────────────────────────────────────────────
 
-CameraManager::CameraManager(CameraFrameQueue& queue)
+CameraManager::CameraManager(CameraFrameQueue &queue)
     : queue_(queue)
-{}
+{
+}
 
 CameraManager::~CameraManager()
 {
@@ -29,13 +30,34 @@ CameraManager::~CameraManager()
 bool CameraManager::open(Resolution res)
 {
     resolution_ = res;
-    const ResolutionConfig& cfg = config_of(res);
+    const ResolutionConfig &cfg = config_of(res);
 
-    if (!init_camera_manager())      return false;
-    if (!acquire_camera())           { cam_manager_->stop(); return false; }
-    if (!configure_stream(cfg))      { release_camera(); cam_manager_->stop(); return false; }
-    if (!allocate_and_map_buffers()) { release_camera(); cam_manager_->stop(); return false; }
-    if (!create_requests())          { unmap_buffers(); release_camera(); cam_manager_->stop(); return false; }
+    if (!init_camera_manager())
+        return false;
+    if (!acquire_camera())
+    {
+        cam_manager_->stop();
+        return false;
+    }
+    if (!configure_stream(cfg))
+    {
+        release_camera();
+        cam_manager_->stop();
+        return false;
+    }
+    if (!allocate_and_map_buffers())
+    {
+        release_camera();
+        cam_manager_->stop();
+        return false;
+    }
+    if (!create_requests())
+    {
+        unmap_buffers();
+        release_camera();
+        cam_manager_->stop();
+        return false;
+    }
 
     // Connect the completion signal before starting so no frame is missed.
     camera_->requestCompleted.connect(this, &CameraManager::on_request_completed);
@@ -58,7 +80,7 @@ void CameraManager::close()
     // Signal requeue_request() to stop re-queuing before stopping the camera.
     running_ = false;
 
-    stop_streaming();   // blocks until all in-flight requests are cancelled
+    stop_streaming(); // blocks until all in-flight requests are cancelled
 
     camera_->requestCompleted.disconnect(this, &CameraManager::on_request_completed);
 
@@ -92,7 +114,8 @@ bool CameraManager::init_camera_manager()
     cam_manager_ = std::make_unique<libcamera::CameraManager>();
 
     int ret = cam_manager_->start();
-    if (ret != 0) {
+    if (ret != 0)
+    {
         std::cerr << "CameraManager: libcamera CameraManager::start() failed: "
                   << ret << "\n";
         cam_manager_.reset();
@@ -107,20 +130,23 @@ bool CameraManager::init_camera_manager()
 
 bool CameraManager::acquire_camera()
 {
-    const auto& cameras = cam_manager_->cameras();
-    if (cameras.empty()) {
+    const auto &cameras = cam_manager_->cameras();
+    if (cameras.empty())
+    {
         std::cerr << "CameraManager: no cameras detected on this system\n";
         return false;
     }
 
     // grab a shared_ptr from the manager by ID so lifetime is correct
     camera_ = cam_manager_->get(cameras[0]->id());
-    if (!camera_) {
+    if (!camera_)
+    {
         std::cerr << "CameraManager: failed to retrieve camera by id\n";
         return false;
     }
 
-    if (camera_->acquire() != 0) {
+    if (camera_->acquire() != 0)
+    {
         std::cerr << "CameraManager: failed to acquire exclusive access to camera\n";
         camera_.reset();
         return false;
@@ -139,40 +165,44 @@ bool CameraManager::acquire_camera()
 // satisfy exactly. configure() programs the hardware.
 // ═══════════════════════════════════════════════════════════════════════════
 
-bool CameraManager::configure_stream(const ResolutionConfig& cfg)
+bool CameraManager::configure_stream(const ResolutionConfig &cfg)
 {
     cam_config_ = camera_->generateConfiguration(
         {libcamera::StreamRole::VideoRecording});
 
-    if (!cam_config_) {
+    if (!cam_config_)
+    {
         std::cerr << "CameraManager: generateConfiguration() failed\n";
         return false;
     }
 
-    libcamera::StreamConfiguration& sc = cam_config_->at(0);
-    sc.size        = {cfg.width, cfg.height};
+    libcamera::StreamConfiguration &sc = cam_config_->at(0);
+    sc.size = {cfg.width, cfg.height};
     sc.pixelFormat = libcamera::formats::NV12;
-    sc.bufferCount = 4;   // 4 DMA buffers in flight — low latency, no starvation
+    sc.bufferCount = 4; // 4 DMA buffers in flight — low latency, no starvation
 
     libcamera::CameraConfiguration::Status status = cam_config_->validate();
-    if (status == libcamera::CameraConfiguration::Invalid) {
+    if (status == libcamera::CameraConfiguration::Invalid)
+    {
         std::cerr << "CameraManager: configuration is invalid even after validate()\n";
         return false;
     }
-    if (status == libcamera::CameraConfiguration::Adjusted) {
+    if (status == libcamera::CameraConfiguration::Adjusted)
+    {
         // Hardware adjusted size or format — report the actual values
         std::cout << "CameraManager: configuration adjusted to "
                   << sc.size.width << "x" << sc.size.height
                   << " fmt=" << sc.pixelFormat << "\n";
     }
 
-    if (camera_->configure(cam_config_.get()) != 0) {
+    if (camera_->configure(cam_config_.get()) != 0)
+    {
         std::cerr << "CameraManager: camera->configure() failed\n";
         return false;
     }
 
     stream_ = sc.stream();
-    stride_ = sc.stride;   // actual bytes per row set by the driver after configure()
+    stride_ = sc.stride; // actual bytes per row set by the driver after configure()
 
     std::cout << "CameraManager: stream configured "
               << sc.size.width << "x" << sc.size.height
@@ -198,28 +228,31 @@ bool CameraManager::allocate_and_map_buffers()
 {
     allocator_ = std::make_unique<libcamera::FrameBufferAllocator>(camera_);
 
-    if (allocator_->allocate(stream_) < 0) {
+    if (allocator_->allocate(stream_) < 0)
+    {
         std::cerr << "CameraManager: FrameBufferAllocator::allocate() failed\n";
         return false;
     }
 
-    for (const auto& buffer : allocator_->buffers(stream_)) {
+    for (const auto &buffer : allocator_->buffers(stream_))
+    {
         // Sum plane lengths to get the total DMA buffer size
         size_t total = 0;
-        for (const auto& plane : buffer->planes())
+        for (const auto &plane : buffer->planes())
             total += plane.length;
 
         // mmap the contiguous DMA region from the first plane's file descriptor
-        int    fd  = buffer->planes()[0].fd.get();
-        void*  ptr = mmap(nullptr, total,
-                          PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        if (ptr == MAP_FAILED) {
+        int fd = buffer->planes()[0].fd.get();
+        void *ptr = mmap(nullptr, total,
+                         PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (ptr == MAP_FAILED)
+        {
             std::cerr << "CameraManager: mmap failed for DMA buffer (fd=" << fd << ")\n";
             unmap_buffers();
             return false;
         }
 
-        mapped_[buffer.get()] = {static_cast<uint8_t*>(ptr), total};
+        mapped_[buffer.get()] = {static_cast<uint8_t *>(ptr), total};
     }
 
     std::cout << "CameraManager: mapped " << mapped_.size() << " DMA buffers\n";
@@ -237,14 +270,17 @@ bool CameraManager::allocate_and_map_buffers()
 
 bool CameraManager::create_requests()
 {
-    for (const auto& buffer : allocator_->buffers(stream_)) {
+    for (const auto &buffer : allocator_->buffers(stream_))
+    {
         auto request = camera_->createRequest();
-        if (!request) {
+        if (!request)
+        {
             std::cerr << "CameraManager: createRequest() failed\n";
             return false;
         }
 
-        if (request->addBuffer(stream_, buffer.get()) < 0) {
+        if (request->addBuffer(stream_, buffer.get()) < 0)
+        {
             std::cerr << "CameraManager: request->addBuffer() failed\n";
             return false;
         }
@@ -263,7 +299,7 @@ bool CameraManager::create_requests()
 void CameraManager::start_streaming()
 {
     camera_->start();
-    for (auto& req : requests_)
+    for (auto &req : requests_)
         camera_->queueRequest(req.get());
 }
 
@@ -286,53 +322,62 @@ void CameraManager::stop_streaming()
 // buffer is immediately returned to the camera.
 // ═══════════════════════════════════════════════════════════════════════════
 
-void CameraManager::on_request_completed(libcamera::Request* request)
+void CameraManager::on_request_completed(libcamera::Request *request)
 {
     // Requests cancelled during stop() must not be re-queued
     if (request->status() == libcamera::Request::RequestCancelled)
         return;
 
-    auto* buf = request->buffers().at(stream_);
+    auto *buf = request->buffers().at(stream_);
 
     auto it = mapped_.find(buf);
-    if (it == mapped_.end()) {
+    if (it == mapped_.end())
+    {
         std::cerr << "CameraManager: completed buffer not in mmap table — dropping\n";
         requeue_request(request);
         return;
     }
 
-    const libcamera::FrameMetadata& meta = buf->metadata();
-    const MappedBuffer& mb = it->second;
+    const libcamera::FrameMetadata &meta = buf->metadata();
+    const MappedBuffer &mb = it->second;
 
-    auto frame         = std::make_shared<Frame>();
-    frame->data        = mb.ptr;
-    frame->data_size   = mb.length;
-    frame->width       = config_of(resolution_).width;
-    frame->height      = config_of(resolution_).height;
-    frame->stride      = stride_;
-    frame->format      = PixelFormat::NV12;
-    frame->sequence    = meta.sequence;
+    auto frame = std::make_shared<Frame>();
+    frame->data = mb.ptr;
+    frame->data_size = mb.length;
+    frame->width = config_of(resolution_).width;
+    frame->height = config_of(resolution_).height;
+    frame->stride = stride_;
+    frame->format = PixelFormat::NV12;
+    frame->sequence = meta.sequence;
 
     // libcamera timestamp is nanoseconds from CLOCK_MONOTONIC
-    frame->timestamp   = std::chrono::steady_clock::time_point(
-                             std::chrono::nanoseconds(meta.timestamp));
+    frame->timestamp = std::chrono::steady_clock::time_point(
+        std::chrono::nanoseconds(meta.timestamp));
+
+    // Expose the DMA-BUF fd so the Recorder can pass it directly to
+    // v4l2h264enc via V4L2_MEMORY_DMABUF — true zero-copy hardware encoding.
+    // The fd is owned by the FrameBufferAllocator and remains valid until close().
+    frame->dma_fd = buf->planes()[0].fd.get();
 
     // release() is invoked when the last shared_ptr<Frame> is destroyed.
     // It returns the DMA buffer to the camera for the next capture cycle.
-    frame->release = [this, request]() {
+    frame->release = [this, request]()
+    {
         requeue_request(request);
     };
 
     // Phase C snapshot: if armed, copy the shared_ptr into still_queue_
     // BEFORE moving it into the video queue so both hold a reference.
     // Phase D: this block is bypassed once the real still stream is active.
-    if (snapshot_armed_.exchange(false, std::memory_order_acq_rel)) {
-        FramePtr still = frame;           // shared_ptr copy — refcount +1
+    if (snapshot_armed_.exchange(false, std::memory_order_acq_rel))
+    {
+        FramePtr still = frame; // shared_ptr copy — refcount +1
         still->stream_type = StreamType::Still;
         still_queue_.push(std::move(still));
     }
 
-    if (!queue_.push(std::move(frame))) {
+    if (!queue_.push(std::move(frame)))
+    {
         // Queue full — drop this frame and immediately recycle the buffer
         requeue_request(request);
     }
@@ -344,7 +389,8 @@ void CameraManager::on_request_completed(libcamera::Request* request)
 
 bool CameraManager::request_snapshot()
 {
-    if (!running_) return false;
+    if (!running_)
+        return false;
     // Arm the flag. on_request_completed() will copy the next video frame
     // into still_queue_ (same DMA pointer, refcount bumped by 1).
     // In Phase D this flag is not used; the still stream fires independently.
@@ -392,7 +438,7 @@ bool CameraManager::create_still_request()
     return false;
 }
 
-void CameraManager::handle_still_completed(libcamera::Request* /*request*/)
+void CameraManager::handle_still_completed(libcamera::Request * /*request*/)
 {
     // TODO Phase D: mirror on_request_completed() for the still stream.
     //               Build a Frame with stream_type = StreamType::Still,
@@ -402,7 +448,7 @@ void CameraManager::handle_still_completed(libcamera::Request* /*request*/)
 
 // ── Re-queue a completed request for the next capture ─────────────────────
 
-void CameraManager::requeue_request(libcamera::Request* request)
+void CameraManager::requeue_request(libcamera::Request *request)
 {
     // Guard against requeueing after close() has stopped the camera.
     // The running_ flag is set to false before camera_->stop(), so any
@@ -418,7 +464,8 @@ void CameraManager::requeue_request(libcamera::Request* request)
 
 void CameraManager::unmap_buffers()
 {
-    for (auto& [buf, mb] : mapped_) {
+    for (auto &[buf, mb] : mapped_)
+    {
         if (mb.ptr)
             munmap(mb.ptr, mb.length);
     }
@@ -427,7 +474,8 @@ void CameraManager::unmap_buffers()
 
 void CameraManager::release_camera()
 {
-    if (camera_) {
+    if (camera_)
+    {
         camera_->release();
         camera_.reset();
     }
