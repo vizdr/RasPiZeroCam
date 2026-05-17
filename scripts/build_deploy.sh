@@ -60,14 +60,21 @@ file "$BUILD_DIR/pizero2cam_app" | grep -q "ARM aarch64" \
     && echo "Binary: ARM aarch64 ✓" \
     || { echo "ERROR: binary is not ARM aarch64"; exit 1; }
 
-# Deploy
+# Deploy binary and web directory
 echo "── Deploy ──"
-ssh $PI_HOST "mkdir -p ~/apps"
+ssh $PI_HOST "mkdir -p ~/apps/web"
 rsync -avz --progress "$BUILD_DIR/pizero2cam_app" \
     "$PI_HOST:~/apps/"
+rsync -avz --progress "$PROJECT_DIR/web/" \
+    "$PI_HOST:~/apps/web/"
+
+# Stop any previously running instance before launching a new one.
+# (Ctrl-C on this script kills only the SSH session, not the remote process.)
+echo "── Stop previous instance ──"
+ssh $PI_HOST "pkill -x pizero2cam_app 2>/dev/null; sleep 1; true"
 
 # Run
 echo "── Run on Pi Zero 2 W ──"
 echo "────────────────────────────────"
-ssh $PI_HOST "~/apps/pizero2cam_app"
+ssh $PI_HOST "cd ~/apps && ./pizero2cam_app"
 echo "────────────────────────────────"
