@@ -2,153 +2,268 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>PiCamera</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: system-ui, sans-serif;
-      background: #1a1a2e;
-      color: #e0e0e0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      padding: 16px;
-    }
-    header {
-      width: 100%;
-      max-width: 720px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0 12px;
-    }
-    h1 { font-size: 1.2rem; color: #a0c4ff; }
-    #battery-widget {
-      font-size: 0.9rem;
-      background: #16213e;
-      border: 1px solid #0f3460;
-      border-radius: 6px;
-      padding: 4px 12px;
-    }
-    #stream-container {
-      width: 100%;
-      max-width: 720px;
-      background: #000;
-      border-radius: 8px;
-      overflow: hidden;
-      aspect-ratio: 4/3;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    #stream-img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-    }
-    #error-msg {
-      display: none;
-      color: #ff6b6b;
-      padding: 8px;
-      text-align: center;
-    }
-    #controls {
-      width: 100%;
-      max-width: 720px;
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-    button {
-      padding: 8px 18px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      font-weight: 600;
-    }
-    #btn-snapshot { background: #0f3460; color: #e0e0e0; }
-    #btn-snapshot:hover { background: #1a5080; }
-    #status-bar {
-      width: 100%;
-      max-width: 720px;
-      font-size: 0.8rem;
-      color: #888;
-      margin-top: 8px;
-    }
-    a { color: #a0c4ff; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;
+         display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:12px}
+    header{width:100%;max-width:760px;display:flex;justify-content:space-between;
+           align-items:center;padding:6px 0 10px}
+    h1{font-size:1.1rem;color:#a0c4ff}
+    #battery-widget{font-size:.85rem;background:#16213e;border:1px solid #0f3460;
+                    border-radius:6px;padding:4px 10px;display:flex;gap:8px;align-items:center}
+    #ws-dot{width:8px;height:8px;border-radius:50%;background:#555;transition:background .3s}
+    #ws-dot.connected{background:#4caf50} #ws-dot.disconnected{background:#f44336}
+    #stream-container{width:100%;max-width:760px;background:#000;border-radius:8px;
+                      overflow:hidden;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}
+    #stream-img{width:100%;height:100%;object-fit:contain;display:block}
+    #low-bat-warn,#store-warn{display:none;padding:4px;width:100%;max-width:760px;
+      border-radius:4px;margin-top:4px;font-size:.8rem;text-align:center}
+    #low-bat-warn{background:#b71c1c;color:#fff}
+    #store-warn{background:#e65100;color:#fff}
+    #rec-status{display:none;background:#1b5e20;color:#c8e6c9;border-radius:4px;
+                padding:4px 10px;width:100%;max-width:760px;margin-top:4px;font-size:.82rem;
+                display:flex;gap:12px;align-items:center}
+    .section{width:100%;max-width:760px;margin-top:10px}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    label{font-size:.8rem;color:#aaa;margin-right:4px}
+    button{padding:7px 14px;border:none;border-radius:5px;cursor:pointer;
+           font-size:.85rem;font-weight:600;opacity:1;transition:opacity .2s}
+    button:disabled{opacity:.35;cursor:default}
+    .btn-res{background:#1a3a5c;color:#90caf9}
+    .btn-res.active{background:#0f3460;border:1px solid #42a5f5}
+    #btn-record{background:#1b5e20;color:#c8e6c9}
+    #btn-stop-rec{background:#b71c1c;color:#fff;display:none}
+    #btn-restart-rec{background:#4a1a00;color:#ffcc80;display:none}
+    #btn-snapshot{background:#1a237e;color:#c5cae9}
+    #status-bar{font-size:.75rem;color:#666;margin-top:6px}
+    #recordings-section{width:100%;max-width:760px;margin-top:12px}
+    #rec-list-toggle{background:none;border:1px solid #333;color:#aaa;
+                     font-size:.8rem;padding:4px 10px;border-radius:4px}
+    #rec-list{display:none;margin-top:6px;border:1px solid #222;border-radius:6px;overflow:hidden}
+    .rec-item{display:flex;justify-content:space-between;align-items:center;
+              padding:6px 10px;border-bottom:1px solid #222;font-size:.8rem}
+    .rec-item:last-child{border-bottom:none}
+    .rec-item:nth-child(even){background:#161622}
+    .rec-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .rec-size{color:#888;margin:0 10px;min-width:50px;text-align:right}
+    .rec-btn{padding:2px 8px;border:none;border-radius:3px;cursor:pointer;font-size:.75rem}
+    .btn-dl{background:#1a3a5c;color:#90caf9}
+    .btn-del{background:#4a0000;color:#ef9a9a}
   </style>
 </head>
 <body>
   <header>
     <h1>&#128247; PiCamera</h1>
     <div id="battery-widget">
+      <span id="ws-dot" class="disconnected" title="WebSocket"></span>
       <span id="bat-pct">--%</span>
-      <span id="bat-v" style="margin-left:6px; color:#888;">--V</span>
+      <span id="bat-v" style="color:#888">--V</span>
+      <span id="bat-chg" style="font-size:.75rem"></span>
     </div>
   </header>
 
   <div id="stream-container">
-    <!-- Browser natively decodes multipart/x-mixed-replace MJPEG streams -->
-    <img id="stream-img"
-         src="/stream.mjpeg"
-         alt="Live stream"
-         onerror="handleStreamError()">
-    <div id="error-msg">
-      Stream unavailable — <a href="javascript:reconnect()">reconnect</a>
+    <img id="stream-img" src="/stream.mjpeg" alt="Live stream"
+         onerror="setTimeout(()=>{document.getElementById('stream-img').src='/stream.mjpeg?'+Date.now()},2000)">
+  </div>
+
+  <div id="low-bat-warn">&#9888; Low battery — please charge soon</div>
+  <div id="store-warn">&#9888; Storage low!</div>
+  <div id="rec-status" style="display:none">
+    <span>&#9679; REC</span>
+    <span id="rec-dur">0s</span>
+    <span id="rec-size" style="color:#888"></span>
+    <span id="rec-file" style="color:#888;overflow:hidden;text-overflow:ellipsis"></span>
+  </div>
+
+  <div class="section">
+    <div class="row">
+      <label>Resolution:</label>
+      <button class="btn-res" onclick="setRes(640,480,30)"  id="res-low">640×480</button>
+      <button class="btn-res active" onclick="setRes(1280,720,30)" id="res-med">1280×720</button>
+      <button class="btn-res" onclick="setRes(1920,1080,25)" id="res-hi">1920×1080</button>
     </div>
   </div>
 
-  <div id="controls">
-    <button id="btn-snapshot" onclick="takeSnapshot()">&#128247; Snapshot</button>
+  <div class="section" style="margin-top:8px">
+    <div class="row">
+      <button id="btn-record"      onclick="startRecord()"  disabled>&#9679; Record</button>
+      <button id="btn-stop-rec"    onclick="stopRecord()">&#9632; Stop</button>
+      <button id="btn-restart-rec" onclick="restartRecord()">&#8635; Restart</button>
+      <button id="btn-snapshot"    onclick="takeSnapshot()" disabled>&#128247; Snapshot</button>
+    </div>
   </div>
 
   <div id="status-bar">
+    <span id="stat-res">--</span> &nbsp;|&nbsp;
     Clients: <span id="stat-clients">--</span> &nbsp;|&nbsp;
-    Resolution: <span id="stat-res">--</span> &nbsp;|&nbsp;
-    <span id="stat-fps">--</span> fps
+    Storage: <span id="stat-storage">--</span>
+  </div>
+
+  <div id="recordings-section">
+    <button id="rec-list-toggle" onclick="toggleRecList()">&#128193; Recordings &#9660;</button>
+    <div id="rec-list"></div>
   </div>
 
   <script>
-    // ── Status polling ──────────────────────────────────────────────────────
-    async function updateStatus() {
-      try {
-        const r = await fetch('/api/status');
-        const s = await r.json();
-        document.getElementById('bat-pct').textContent  = s.battery_pct + '%';
-        document.getElementById('bat-v').textContent    = s.voltage_v.toFixed(2) + 'V';
-        document.getElementById('stat-clients').textContent = s.clients;
-        document.getElementById('stat-res').textContent     = s.resolution;
-        document.getElementById('stat-fps').textContent     = s.fps;
-      } catch (e) { /* server not yet ready */ }
-    }
-    updateStatus();
-    setInterval(updateStatus, 5000);
+    let ws, wsOk=false, recListOpen=false, recActive=false;
 
-    // ── Stream error handling ───────────────────────────────────────────────
-    function handleStreamError() {
-      document.getElementById('stream-img').style.display  = 'none';
-      document.getElementById('error-msg').style.display   = 'block';
+    // ── WebSocket ─────────────────────────────────────────────────────────
+    function connectWs(){
+      ws=new WebSocket(`ws://${location.hostname}:8081/ws`);
+      ws.onopen=()=>{
+        wsOk=true;
+        document.getElementById('ws-dot').className='connected';
+        document.getElementById('btn-record').disabled=false;
+        document.getElementById('btn-snapshot').disabled=false;
+        ws.send(JSON.stringify({cmd:'get_status'}));
+      };
+      ws.onclose=()=>{
+        wsOk=false;
+        document.getElementById('ws-dot').className='disconnected';
+        document.getElementById('btn-record').disabled=true;
+        document.getElementById('btn-snapshot').disabled=true;
+        setTimeout(connectWs,3000);
+      };
+      ws.onerror=()=>ws.close();
+      ws.onmessage=(ev)=>{
+        let m; try{m=JSON.parse(ev.data)}catch{return}
+        if(m.type==='battery_update')   updateBattery(m);
+        else if(m.type==='recording_status') updateRecStatus(m);
+        else if(m.type==='storage_warning')  showStoreWarn(m);
+        else if(m.status)                    handleResp(m);
+      };
     }
 
-    function reconnect() {
-      const img = document.getElementById('stream-img');
-      img.style.display = 'block';
-      document.getElementById('error-msg').style.display = 'none';
-      img.src = '/stream.mjpeg?' + Date.now();  // cache-bust
+    // ── Battery ───────────────────────────────────────────────────────────
+    function updateBattery(s){
+      document.getElementById('bat-pct').textContent=s.percentage+'%';
+      document.getElementById('bat-v').textContent=s.voltage_v.toFixed(2)+'V';
+      document.getElementById('bat-chg').textContent=s.charging?'⚡':'';
+      document.getElementById('low-bat-warn').style.display=s.low_battery_warning?'block':'none';
     }
 
-    // ── Snapshot ────────────────────────────────────────────────────────────
-    function takeSnapshot() {
-      const a = document.createElement('a');
-      a.href     = '/snapshot.jpg';
-      a.download = 'snapshot_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.jpg';
-      a.click();
+    // ── Status ────────────────────────────────────────────────────────────
+    function handleResp(r){
+      if(r.camera)    document.getElementById('stat-res').textContent=r.camera.resolution;
+      if(r.streaming) document.getElementById('stat-clients').textContent=r.streaming.clients;
+      if(r.storage)   document.getElementById('stat-storage').textContent=
+          Math.round(r.storage.free_mb/1024)+' GB free';
+      if(r.battery)   updateBattery(r.battery);
+      if(r.recording){
+        if(r.recording.active) showRecActive(r.recording);
+        else                   showRecIdle();
+      }
     }
+
+    // ── Recording status ──────────────────────────────────────────────────
+    function updateRecStatus(s){
+      if(!s.active){showRecIdle();return}
+      showRecActive(s);
+    }
+    function showRecActive(s){
+      recActive=true;
+      document.getElementById('rec-status').style.display='flex';
+      document.getElementById('rec-dur').textContent=s.duration_s+'s';
+      if(s.size_mb!=null)
+        document.getElementById('rec-size').textContent=(s.size_mb).toFixed(1)+' MB';
+      if(s.file)
+        document.getElementById('rec-file').textContent=s.file.split('/').pop();
+      document.getElementById('btn-record').style.display='none';
+      document.getElementById('btn-stop-rec').style.display='inline-block';
+      document.getElementById('btn-restart-rec').style.display='inline-block';
+    }
+    function showRecIdle(){
+      recActive=false;
+      document.getElementById('rec-status').style.display='none';
+      document.getElementById('btn-stop-rec').style.display='none';
+      document.getElementById('btn-restart-rec').style.display='none';
+      document.getElementById('btn-record').style.display='inline-block';
+    }
+
+    // ── Storage warning ───────────────────────────────────────────────────
+    function showStoreWarn(s){
+      const el=document.getElementById('store-warn');
+      el.textContent=`⚠ Storage low: ${s.free_mb} MB free`;
+      el.style.display='block';
+    }
+
+    // ── Commands ──────────────────────────────────────────────────────────
+    function send(obj){if(wsOk)ws.send(JSON.stringify(obj))}
+
+    function setRes(w,h,f){
+      // Update active button
+      ['res-low','res-med','res-hi'].forEach(id=>
+        document.getElementById(id).className='btn-res');
+      if(w===640)       document.getElementById('res-low').className='btn-res active';
+      else if(w===1280) document.getElementById('res-med').className='btn-res active';
+      else              document.getElementById('res-hi').className='btn-res active';
+      send({cmd:'set_resolution',width:w,height:h,fps:f});
+    }
+
+    function startRecord(){ send({cmd:'record_start'}); }
+    function stopRecord(){   send({cmd:'record_stop'});  }
+    function restartRecord(){send({cmd:'record_restart'});}
+
+    function takeSnapshot(){
+      send({cmd:'snapshot'});
+      // Also trigger direct HTTP download
+      const a=document.createElement('a');
+      a.href='/snapshot.jpg'; a.download='snap_'+Date.now()+'.jpg'; a.click();
+    }
+
+    // ── Recordings list ───────────────────────────────────────────────────
+    function toggleRecList(){
+      recListOpen=!recListOpen;
+      document.getElementById('rec-list').style.display=recListOpen?'block':'none';
+      document.getElementById('rec-list-toggle').textContent=
+        (recListOpen?'▲':'▼')+' Recordings';
+      if(recListOpen) loadRecList();
+    }
+
+    function loadRecList(){
+      if(!wsOk)return;
+      ws.send(JSON.stringify({cmd:'list_recordings'}));
+    }
+
+    // Intercept list_recordings response
+    ws&&(ws._origOnMsg=ws.onmessage);
+    window._handleListResp=function(r){
+      if(!r.files)return;
+      const el=document.getElementById('rec-list');
+      if(!r.files.length){el.innerHTML='<div class="rec-item" style="color:#666">No recordings</div>';return}
+      el.innerHTML=r.files.map(f=>`
+        <div class="rec-item">
+          <span class="rec-name" title="${f.name}">${f.name}</span>
+          <span class="rec-size">${f.size_mb.toFixed(1)} MB</span>
+          <button class="rec-btn btn-dl" onclick="dlRec('${f.name}')">↓</button>
+          <button class="rec-btn btn-del" onclick="delRec('${f.name}')">🗑</button>
+        </div>`).join('');
+    };
+
+    function dlRec(name){
+      const a=document.createElement('a');
+      a.href='/recordings/'+name; a.download=name; a.click();
+    }
+    function delRec(name){
+      if(!confirm('Delete '+name+'?'))return;
+      send({cmd:'delete_recording',filename:name});
+      setTimeout(loadRecList,500);
+    }
+
+    // Patch ws.onmessage to also handle list_recordings response
+    const _origHandleResp=handleResp;
+    window.handleResp=function(r){
+      _origHandleResp(r);
+      if(r.files!==undefined) window._handleListResp(r);
+    };
+
+    // ── Status polling (fallback) ─────────────────────────────────────────
+    setInterval(()=>{ if(wsOk) send({cmd:'get_status'}); }, 10000);
+
+    connectWs();
   </script>
 </body>
 </html>

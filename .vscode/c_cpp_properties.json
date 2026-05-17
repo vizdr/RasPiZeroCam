@@ -2,9 +2,20 @@
     "configurations": [
         {
             "name": "Cross-Compile Camera aarch64 (Pi Zero 2 W)",
+            "compileCommands": "${workspaceFolder}/build/debug/compile_commands.json",
+            "compilerPath": "/usr/bin/aarch64-linux-gnu-g++",
+            "compilerArgs": [
+                "--sysroot=${env:HOME}/rpi-sysroot",
+                "-march=armv8-a",
+                "-mtune=cortex-a53"
+            ],
             "includePath": [
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/third_party",
+                "/usr/aarch64-linux-gnu/include/c++/13",
+                "/usr/aarch64-linux-gnu/include/c++/13/aarch64-linux-gnu",
+                "/usr/aarch64-linux-gnu/include/c++/13/backward",
+                "/usr/lib/gcc-cross/aarch64-linux-gnu/13/include",
                 "${env:HOME}/rpi-sysroot/usr/include",
                 "${env:HOME}/rpi-sysroot/usr/include/aarch64-linux-gnu",
                 "${env:HOME}/rpi-sysroot/usr/include/libcamera",
@@ -17,18 +28,12 @@
             "defines": [
                 "__aarch64__",
                 "__ARM_ARCH=8",
-                "DEBUG"
+                "DEBUG=1",
+                "HAVE_LIBCAMERA=1"
             ],
-            "compilerPath": "/usr/bin/aarch64-linux-gnu-g++",
-            "compilerArgs": [
-                "--sysroot=${env:HOME}/rpi-sysroot",
-                "-march=armv8-a",
-                "-mtune=cortex-a53"
-            ],
-            "cStandard":   "c17",
+            "cStandard": "c17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "linux-gcc-arm64",
-            "configurationProvider": "ms-vscode.cmake-tools"
+            "intelliSenseMode": "linux-gcc-arm64"
         }
     ],
     "version": 4

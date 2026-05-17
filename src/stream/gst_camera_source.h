@@ -1,32 +1,31 @@
 // src/stream/gst_camera_source.h
-// GStreamer-based camera source that delivers hardware-encoded JPEG frames.
+// GStreamer-based camera source with MJPEG streaming, H264 recording and snapshot.
 //
-// Pipeline:
+// Pipeline (Phase 4 — tee with two branches):
 //   libcamerasrc
 //   ! video/x-raw,format=NV12,width=W,height=H,framerate=FPS/1
-//   ! queue max-size-buffers=2 leaky=downstream
-//   ! v4l2jpegenc extra-controls="controls,compression_quality=Q"
-//   ! appsink name=sink sync=false max-buffers=2 drop=true
+//   ! tee name=t
+//   t. ! queue leaky=downstream
+//      ! v4l2jpegenc compression_quality=Q     (HW JPEG, DMA-BUF, 30fps)
+//      ! appsink name=mjpeg_sink               → MjpegServer + snapshot
+//   t. ! queue leaky=downstream max-size-buffers=4
+//      ! valve name=rec_valve drop=true        (gate — open on record_start)
+//      ! videoconvert
+//      ! openh264enc                           (SW H264 — HW h264enc fails alongside HW JPEG)
+//      ! h264parse ! mp4mux name=muxer
+//      ! filesink name=rec_sink sync=false
 //
-// Why this achieves 30fps where our manual approach hit 16fps:
-//   GStreamer negotiates memory:DMABuf caps between libcamerasrc and
-//   v4l2jpegenc at pipeline start. This puts v4l2jpegenc into
-//   V4L2_MEMORY_DMABUF input mode — the camera's DMA frames go directly
-//   into the hardware JPEG encoder without any copy or conversion.
-//   libcamerasrc also manages the ISP buffer lifecycle correctly, allowing
-//   the ISP to run at its native 30fps.
-//
-// libcamerasrc is installed without sudo by extracting from the deb package
-// into ~/gst-plugins/. The GstCameraSource constructor registers that path
-// with the GStreamer registry before starting the pipeline.
-//
-// Thread model:
-//   start() / stop() — call from main thread
-//   jpeg_callback    — fired from GStreamer's internal appsink thread
+// Why openh264enc instead of v4l2h264enc for recording:
+//   The bcm2835-codec cannot serve two simultaneous V4L2 M2M DMA-BUF consumers
+//   from the same ISP tee (validated: v4l2h264enc fails alongside v4l2jpegenc).
+//   openh264enc uses ~25-35% of one Cortex-A53 core at 640×480 — manageable.
+//   See BottlenecksJPEG.md for full analysis.
 
 #pragma once
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -34,19 +33,14 @@
 #include <thread>
 
 #include "camera/resolution.h"
+#include "record/recorder.h"
 
-// Forward-declare GStreamer struct types (avoids pulling all of GLib into
-// every translation unit that includes this header).
 typedef struct _GstElement GstElement;
 typedef struct _GstBus     GstBus;
 typedef struct _GstAppSink GstAppSink;
-// GstFlowReturn is an enum used only in private static callback — declared
-// in .cpp where gst.h is fully included.
 
 class GstCameraSource {
 public:
-    // Fires from GStreamer's appsink thread when a hardware-encoded JPEG
-    // frame is ready. `data` is valid only during the call — copy it.
     using JpegCallback = std::function<void(const uint8_t* data, size_t size)>;
 
     GstCameraSource(const ResolutionConfig& cfg, int jpeg_quality = 85);
@@ -55,36 +49,72 @@ public:
     GstCameraSource(const GstCameraSource&)            = delete;
     GstCameraSource& operator=(const GstCameraSource&) = delete;
 
-    // Build the GStreamer pipeline and start streaming.
+    // ── Lifecycle ──────────────────────────────────────────────────────────
     bool start();
-
-    // Stop streaming and tear down the pipeline.
     void stop();
-
     bool is_running() const noexcept { return running_.load(); }
+
+    // Change resolution at runtime — stops recording, rebuilds pipeline (~2s gap).
+    bool set_resolution(const ResolutionConfig& cfg);
+    const ResolutionConfig& current_config() const noexcept { return cfg_; }
 
     void set_jpeg_callback(JpegCallback cb) { jpeg_cb_ = std::move(cb); }
 
-    // Called by the file-scope GstAppSinkCallbacks trampoline in .cpp.
-    // Must be public so the trampoline (a non-member function) can reach it.
+    // ── Recording ──────────────────────────────────────────────────────────
+    // Open the recording valve and start writing H264 MP4 to filepath.
+    bool start_recording(const std::string& filepath);
+
+    // Close the valve, flush mp4mux (EOS injection), finalize the file.
+    // Blocks up to 5 s waiting for the muxer to write the moov atom.
+    bool stop_recording();
+
+    bool        is_recording()      const noexcept { return recording_.load(); }
+    std::string current_recording() const;
+    int         recording_seconds() const;   // elapsed seconds since start
+
+    // ── Snapshot ───────────────────────────────────────────────────────────
+    // Capture the next JPEG frame from the MJPEG appsink and write to filepath.
+    // Blocks up to 200 ms (one frame at 30fps ≈ 33 ms).
+    bool take_snapshot(const std::string& filepath);
+
+    // Called by the file-scope appsink trampoline — must be public.
     void on_jpeg_sample(GstAppSink* sink);
 
 private:
     std::string build_pipeline() const;
-
-
-    // Bus monitor thread — logs errors/warnings, triggers stop on EOS or error
-    void bus_thread_fn();
+    void        bus_thread_fn();
+    void        rec_drain_thread_fn();   // pulls NV12 from rec_sink, feeds Recorder
 
     ResolutionConfig cfg_;
     int              jpeg_quality_;
     JpegCallback     jpeg_cb_;
 
+    // ── GStreamer elements ─────────────────────────────────────────────────
     GstElement* pipeline_ = nullptr;
-    GstElement* appsink_  = nullptr;
+    GstElement* appsink_  = nullptr;   // mjpeg_sink  — JPEG frames
+    GstElement* rec_sink_ = nullptr;   // rec_sink    — NV12 frames for Recorder
     GstBus*     bus_      = nullptr;
 
     std::thread       bus_thread_;
     std::atomic<bool> abort_bus_{false};
-    std::atomic<bool> running_   {false};
+    std::atomic<bool> running_  {false};
+
+    // ── Recording state ────────────────────────────────────────────────────
+    // Recording is delegated to the existing Recorder class (separate GStreamer
+    // pipeline: appsrc → openh264enc → mp4mux → filesink). This avoids the
+    // GStreamer filesink location-change-while-PLAYING limitation.
+    std::unique_ptr<Recorder>              recorder_;
+    std::atomic<bool>                      recording_{false};
+    std::string                            current_file_;
+    std::chrono::steady_clock::time_point  rec_start_;
+    mutable std::mutex                     rec_file_mutex_;
+
+    // Background thread that drains the NV12 appsink and feeds Recorder
+    std::thread       rec_thread_;
+    std::atomic<bool> abort_rec_{false};
+
+    // ── Snapshot state ─────────────────────────────────────────────────────
+    std::atomic<bool> snapshot_pending_{false};
+    std::string       snapshot_path_;
+    std::mutex        snapshot_mutex_;
 };

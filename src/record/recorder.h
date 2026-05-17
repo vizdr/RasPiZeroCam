@@ -57,7 +57,10 @@ public:
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
-    bool start(const ResolutionConfig& cfg, const std::string& filename = "");
+    // sw_encoder=true: NV12 input → videoconvert → openh264enc → mp4mux (system memory)
+    // sw_encoder=false: H264 bytes from H264HardwareEncoder → h264parse → mp4mux (DMA-BUF)
+    bool start(const ResolutionConfig& cfg, const std::string& filename = "",
+               bool sw_encoder = false);
     bool stop();
     bool restart(const ResolutionConfig& cfg);
 
@@ -77,6 +80,7 @@ public:
 private:
     std::string      recordings_dir_;
     std::string      current_file_;
+    bool             sw_encoder_{false};   // NV12 input mode vs H264 byte-stream
     ResolutionConfig cfg_{};
 
     // ── Hardware encoder ───────────────────────────────────────────────────

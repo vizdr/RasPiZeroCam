@@ -41,6 +41,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_executable(pizero2cam_app
     src/main.cpp
     src/power/ina219.cpp
+    src/power/battery_monitor.cpp
     src/camera/camera_manager.cpp
     src/record/recorder.cpp
     src/record/h264_hw_encoder.cpp
@@ -48,6 +49,8 @@ add_executable(pizero2cam_app
     src/stream/jpeg_hw_encoder.cpp
     src/stream/jpeg_mt_encoder.cpp
     src/stream/gst_camera_source.cpp
+    src/control/ws_server.cpp
+    src/control/command_dispatcher.cpp
 )
 
 # ── Include directories ────────────────────────────────

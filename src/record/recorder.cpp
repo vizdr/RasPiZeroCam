@@ -27,7 +27,8 @@ Recorder::~Recorder()
 
 // ── start() ────────────────────────────────────────────────────────────────
 
-bool Recorder::start(const ResolutionConfig& cfg, const std::string& filename)
+bool Recorder::start(const ResolutionConfig& cfg, const std::string& filename,
+                      bool sw_encoder)
 {
     std::lock_guard<std::mutex> lock(mtx_);
 
@@ -39,21 +40,25 @@ bool Recorder::start(const ResolutionConfig& cfg, const std::string& filename)
     std::filesystem::create_directories(recordings_dir_);
 
     cfg_          = cfg;
+    sw_encoder_   = sw_encoder;
     current_file_ = filename.empty() ? next_filename() : filename;
     first_output_ = true;
     base_ts_us_   = 0;
 
-    // ── Start hardware encoder ─────────────────────────────────────────────
-    try {
-        hw_encoder_ = std::make_unique<H264HardwareEncoder>(
-            cfg_, cfg_.bitrate_kbps * 1000);
-    } catch (const std::exception& e) {
-        std::cerr << "Recorder: hardware encoder failed: " << e.what() << "\n";
-        return false;
+    // ── Start hardware encoder (DMA-BUF path only) ─────────────────────────
+    if (!sw_encoder_) {
+        try {
+            hw_encoder_ = std::make_unique<H264HardwareEncoder>(
+                cfg_, cfg_.bitrate_kbps * 1000);
+        } catch (const std::exception& e) {
+            std::cerr << "Recorder: hardware encoder failed: " << e.what() << "\n";
+            return false;
+        }
     }
 
-    // ── Build GStreamer mux pipeline (no encoder element) ──────────────────
-    // appsrc receives pre-encoded H264 byte-stream NAL units from the V4L2 encoder.
+    // ── Build GStreamer pipeline ────────────────────────────────────────────
+    // sw_encoder=false: appsrc(H264 bytes) → h264parse → mp4mux → filesink
+    // sw_encoder=true:  appsrc(NV12)       → openh264enc → h264parse → mp4mux → filesink
     const std::string pipe_str = build_pipeline_str(cfg_, current_file_);
     std::cout << "Recorder pipeline: " << pipe_str << "\n";
 
@@ -86,7 +91,8 @@ bool Recorder::start(const ResolutionConfig& cfg, const std::string& filename)
         return false;
     }
 
-    // ── Wire encoder output → GStreamer appsrc ────────────────────────────
+    // ── Wire HW encoder output → GStreamer appsrc (DMA-BUF path only) ───────
+    if (!sw_encoder_)
     hw_encoder_->set_output_ready_callback(
         [this](const uint8_t* data, size_t size, int64_t ts_us, bool /*keyframe*/) {
 
@@ -111,10 +117,10 @@ bool Recorder::start(const ResolutionConfig& cfg, const std::string& filename)
             std::cerr << "Recorder: appsrc push returned " << ret << "\n";
     });
 
-    // input_done_callback: FramePtr drops here → Frame::release() → libcamera requeue
-    hw_encoder_->set_input_done_callback([](FramePtr /*frame*/) {
-        // frame destroyed on scope exit
-    });
+    if (!sw_encoder_) {
+        // input_done_callback: FramePtr drops here → Frame::release() → libcamera requeue
+        hw_encoder_->set_input_done_callback([](FramePtr /*frame*/) {});
+    }
 
     state_.store(RecorderState::RECORDING, std::memory_order_release);
     std::cout << "Recorder: started → " << current_file_ << "\n";
@@ -178,11 +184,40 @@ bool Recorder::push_frame(FramePtr frame)
 {
     if (state_.load(std::memory_order_acquire) != RecorderState::RECORDING)
         return false;
-    if (!hw_encoder_ || frame->dma_fd < 0)
+    // In sw_encoder mode hw_encoder_ is nullptr — only check in DMA-BUF mode
+    if (!sw_encoder_ && !hw_encoder_)
         return false;
 
     const int64_t ts_us = std::chrono::duration_cast<std::chrono::microseconds>(
         frame->timestamp.time_since_epoch()).count();
+
+    // Phase 4: frames arrive from GstCameraSource tee appsink (system memory,
+    // dma_fd = -1). H264HardwareEncoder requires DMA-BUF fd — skip DMA-BUF path
+    // and push NV12 data directly into the GStreamer recording appsrc instead.
+    if (frame->dma_fd < 0) {
+        // System-memory NV12: wrap the raw pointer in a GstBuffer and push
+        // directly into the appsrc (openh264enc path in the mux pipeline).
+        if (!appsrc_) return false;
+
+        auto* keepalive = new FramePtr(frame);
+        static const GQuark kQ = g_quark_from_static_string("rec-frame-keepalive");
+
+        GstBuffer* buf = gst_buffer_new();
+        GstMemory* mem = gst_memory_new_wrapped(
+            static_cast<GstMemoryFlags>(0),
+            frame->data, frame->data_size, 0, frame->data_size,
+            nullptr, nullptr);
+        gst_buffer_append_memory(buf, mem);
+        gst_mini_object_set_qdata(GST_MINI_OBJECT_CAST(buf), kQ, keepalive,
+            [](gpointer p) { delete static_cast<FramePtr*>(p); });
+
+        if (first_output_) { base_ts_us_ = ts_us; first_output_ = false; }
+        GST_BUFFER_PTS(buf)      = static_cast<GstClockTime>((ts_us - base_ts_us_) * 1000);
+        GST_BUFFER_DURATION(buf) = GST_SECOND / cfg_.fps;
+
+        const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
+        return ret == GST_FLOW_OK;
+    }
 
     return hw_encoder_->encode(frame->dma_fd, frame->data_size, ts_us, frame);
 }
@@ -216,24 +251,46 @@ std::string Recorder::next_filename() const
     return recordings_dir_ + "/" + buf;
 }
 
-// ── GStreamer mux pipeline (H264 byte-stream → MP4) ────────────────────────
+// ── GStreamer pipeline builder ─────────────────────────────────────────────
 
 std::string Recorder::build_pipeline_str(const ResolutionConfig& cfg,
                                           const std::string& path) const
 {
-    // appsrc receives pre-encoded H264 NAL units from H264HardwareEncoder.
-    // No encoder element in this pipeline — encoding is done by /dev/video11.
     std::ostringstream ss;
-    ss << "appsrc name=src format=time is-live=true block=false"
-       << " caps=video/x-h264"
-       << ",stream-format=byte-stream"
-       << ",alignment=au"
-       << ",width="     << cfg.width
-       << ",height="    << cfg.height
-       << ",framerate=" << cfg.fps << "/1"
-       << " ! h264parse"
-       << " ! mp4mux"
-       << " ! filesink name=sink sync=false location=" << path;
+
+    if (sw_encoder_) {
+        // NV12 → openh264enc (SW) → mp4mux
+        // Used when input comes from GstCameraSource tee appsink (system memory).
+        // openh264enc is confirmed working on Pi OS Trixie (BottlenecksJPEG.md).
+        ss << "appsrc name=src format=time is-live=true block=false"
+           << " caps=video/x-raw,format=NV12"
+           << ",width="     << cfg.width
+           << ",height="    << cfg.height
+           << ",framerate=" << cfg.fps << "/1"
+           << " ! videoconvert"
+           << " ! queue max-size-buffers=4 leaky=downstream"
+           << " ! openh264enc"
+           << " bitrate=" << (cfg.bitrate_kbps * 1000)
+           << " multi-thread=2"
+           << " scene-change-detection=true"
+           << " ! h264parse config-interval=-1"
+           << " ! mp4mux"
+           << " ! filesink name=sink sync=false location=" << path;
+    } else {
+        // H264 byte-stream → mp4mux
+        // Used with H264HardwareEncoder (DMA-BUF path, /dev/video11).
+        ss << "appsrc name=src format=time is-live=true block=false"
+           << " caps=video/x-h264"
+           << ",stream-format=byte-stream"
+           << ",alignment=au"
+           << ",width="     << cfg.width
+           << ",height="    << cfg.height
+           << ",framerate=" << cfg.fps << "/1"
+           << " ! h264parse"
+           << " ! mp4mux"
+           << " ! filesink name=sink sync=false location=" << path;
+    }
+
     return ss.str();
 }
 
