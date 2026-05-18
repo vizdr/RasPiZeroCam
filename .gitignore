@@ -20,6 +20,7 @@ CTestTestfile.cmake
 recordings/
 
 # ── VS Code workspace state ────────────────────────────
+.claude
 # Commit the config files; ignore generated/local-only files.
 .vscode/configurationCache.log
 .vscode/dryrun.log
