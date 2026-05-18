@@ -60,13 +60,18 @@ file "$BUILD_DIR/pizero2cam_app" | grep -q "ARM aarch64" \
     && echo "Binary: ARM aarch64 ✓" \
     || { echo "ERROR: binary is not ARM aarch64"; exit 1; }
 
-# Deploy binary and web directory
+# Deploy binary, web directory, and mode-switch scripts
 echo "── Deploy ──"
 ssh $PI_HOST "mkdir -p ~/apps/web"
 rsync -avz --progress "$BUILD_DIR/pizero2cam_app" \
     "$PI_HOST:~/apps/"
 rsync -avz --progress "$PROJECT_DIR/web/" \
     "$PI_HOST:~/apps/web/"
+rsync -avz --progress \
+    "$PROJECT_DIR/scripts/ap_mode.sh" \
+    "$PROJECT_DIR/scripts/client_mode.sh" \
+    "$PI_HOST:~/apps/"
+ssh $PI_HOST "chmod +x ~/apps/ap_mode.sh ~/apps/client_mode.sh"
 
 # Stop any previously running instance before launching a new one.
 # (Ctrl-C on this script kills only the SSH session, not the remote process.)

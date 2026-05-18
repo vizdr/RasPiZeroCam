@@ -110,8 +110,9 @@ int main(int, char **)
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
 
-    std::signal(SIGINT, on_signal);
+    std::signal(SIGINT,  on_signal);
     std::signal(SIGTERM, on_signal);
+    std::signal(SIGHUP,  SIG_IGN);   // survive SSH session drop / mode switch
 
     struct utsname u;
     uname(&u);
