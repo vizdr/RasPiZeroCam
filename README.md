@@ -1,9 +1,13 @@
 # PiCamera — Raspberry Pi Zero 2 W Camera Controller
 
-A self-contained outdoor camera system. The Pi acts as a standalone WiFi access
+A self-contained outdoor camera system for airplane flying models. The Pi acts as a standalone WiFi access
 point; a laptop connects directly to it and receives a live MJPEG video stream
 in the browser while sending control commands over WebSocket — no router or
 internet required.
+
+<p align="center">
+  <img src="RasPi-Zero2-Cam.JPG" width="900">
+</p>
 
 ---
 
